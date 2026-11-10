@@ -10,6 +10,6 @@ Lire chaque capteur une fois par cycle. Angles en degrés, temps en ms ; partage
 
 Installer le firmware MicroPython adapté, puis transférer `main.py`, `src/` et les pilotes compatibles avec `mpremote`. Le `venv` reste sur l'ordinateur. Les fichiers sont uniquement des squelettes à implémenter.
 
-Idée générale de l’architecture, pour rappel :
+Idée générale du code, pour rappel :
 
 ![Idée générale de l’architecture du système embarqué](r%C3%A9flexions%20architecture%20code.png)
