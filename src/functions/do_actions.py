@@ -10,6 +10,9 @@ def set_alerte_dessalement(active: bool) -> None:
 def update_alerte_sonore(maintenant_ms: int) -> None:
     """Fait avancer le motif sonore pulsé sans bloquer le programme."""
 
+def instructions_sonores()-> None
+    """ Donne les instructions sonores pour vorder la voile """
+
 
 def arreter_sorties() -> None:
     """Arrête les sorties lors de l'arrêt du système."""
