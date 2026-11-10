@@ -1,50 +1,74 @@
-# Acquisition et calcul de grandeurs physiques, sans décision ni commande.
-# Lire chaque capteur une fois par cycle, puis réutiliser ses données.
-# Vecteurs : tuples (x, y, z) ; angles en degrés ; temps en millisecondes.
-# Les erreurs de lecture doivent être signalées, jamais remplacées par zéro.
+"""Acquisition et calculs physiques ; les pilotes sont fournis en paramètres."""
+
+import math
 
 
-def get_boussole_bateau_data() -> tuple:
-    """Lit le champ magnétique (x, y, z) de la boussole du bateau."""
+def vecteur_valide(valeur: tuple) -> tuple:
+    """Vérifie les trois composantes finies d'une mesure."""
+    if len(valeur) != 3 or not all(math.isfinite(v) for v in valeur):
+        raise ValueError("Vecteur capteur invalide")
+    return tuple(valeur)
 
 
-def get_boussole_bome_data() -> tuple:
-    """Lit le champ magnétique (x, y, z) de la boussole de la bôme."""
+def get_boussole_bateau_data(capteurs: object) -> tuple:
+    """Lit le champ magnétique du bateau en µT."""
+    return vecteur_valide(capteurs.read_bateau())
 
 
-def get_accelerometre_data() -> tuple:
-    """Lit l'accélération (x, y, z) en m/s² dans le repère du bateau."""
+def get_boussole_bome_data(capteurs: object) -> tuple:
+    """Lit le champ magnétique de la bôme en µT."""
+    return vecteur_valide(capteurs.read_bome())
 
 
-def get_bouton_data() -> bool:
-    """Indique si le bouton est appuyé, avant anti-rebond."""
+def get_accelerometre_data(capteurs: object) -> tuple:
+    """Lit l'accélération (x, y, z) en m/s²."""
+    return vecteur_valide(capteurs.read_acceleration())
+
+
+def get_bouton_data(capteurs: object) -> bool:
+    """Lit l'appui brut avant anti-rebond."""
+    return bool(capteurs.read_button())
 
 
 def get_bateau_cap(champ_magnetique: tuple) -> float:
-    """Calcule le cap du bateau entre 0° inclus et 360° exclus."""
+    """Calcule le cap magnétique horizontal entre 0° et 360° exclus."""
+    x, y, _ = vecteur_valide(champ_magnetique)
+    if x * x + y * y < 1e-12:
+        raise ValueError("Champ magnétique horizontal nul")
+    return math.degrees(math.atan2(y, x)) % 360
 
 
 def get_bome_cap(champ_magnetique: tuple) -> float:
-    """Calcule le cap de la bôme entre 0° inclus et 360° exclus."""
+    """Calcule le cap magnétique horizontal de la bôme."""
+    return get_bateau_cap(champ_magnetique)
 
 
 def get_bome_angle(cap_bateau: float, cap_bome: float, offset: float) -> float:
-    """Calcule l'angle relatif de la bôme entre -180° inclus et 180° exclus."""
+    """Calcule l'angle relatif dans [-180°, 180°[."""
+    if not all(math.isfinite(v) for v in (cap_bateau, cap_bome, offset)):
+        raise ValueError("Cap ou référence invalide")
+    return (cap_bome - cap_bateau - offset + 180) % 360 - 180
 
 
 def get_inclinaison(acceleration: tuple) -> float:
-    """Estime la gîte signée à partir de l'accélération mesurée."""
+    """Estime la gîte signée autour de l'axe x, en degrés."""
+    x, y, z = vecteur_valide(acceleration)
+    if x * x + y * y + z * z < 1e-6 or y * y + z * z < 1e-12:
+        raise ValueError("Accélération inexploitable pour la gîte")
+    return math.degrees(math.atan2(y, z))
 
 
 def filtrer_passe_bas(valeur: float, precedente: float, alpha: float) -> float:
-    """Filtre une mesure avec un coefficient alpha compris entre 0 et 1."""
+    """Applique un lissage exponentiel, avec alpha dans ]0, 1]."""
+    if not 0 < alpha <= 1 or not all(math.isfinite(v) for v in (valeur, precedente)):
+        raise ValueError("Paramètres du filtre invalides")
+    return precedente + alpha * (valeur - precedente)
 
 
-# Le zéro relatif ne remplace pas la calibration magnétique des boussoles.
-# Prévoir la compensation d'inclinaison selon le montage et la précision visée.
-# Utiliser des pilotes compatibles MicroPython pour les références réelles.
-# La requête météo devra céder la main ; async seul ne suffit pas.
-
-
-async def get_meteo_data(latitude: float, longitude: float, timeout_ms: int) -> dict:
-    """Récupère la météo normalisée avec un délai réseau limité."""
+async def get_meteo_data(
+    latitude: float, longitude: float, timeout_ms: int, fournisseur: object
+) -> dict:
+    """Récupère la météo depuis le fournisseur configuré."""
+    if not -90 <= latitude <= 90 or not -180 <= longitude <= 180 or timeout_ms <= 0:
+        raise ValueError("Coordonnées ou délai météo invalides")
+    return await fournisseur.fetch(latitude, longitude, timeout_ms)
