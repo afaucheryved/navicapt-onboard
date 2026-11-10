@@ -25,6 +25,6 @@ Vérifier les repères/signes dans `config.py` : gîte proche de 0° à plat. B�
 
 Protocoles de référence : [SEN0694 — fabricant](https://github.com/DFRobot/DFRobot_Multi_DOF_IMU/tree/master/src), [MMC5603 — Adafruit](https://github.com/adafruit/Adafruit_CircuitPython_MMC56x3), [API Open-Meteo](https://open-meteo.com/en/docs).
 
-Idée générale de l’architecture, pour rappel :
+Idée générale du code, pour rappel :
 
 ![Idée générale de l’architecture du système embarqué](r%C3%A9flexions%20architecture%20code.png)

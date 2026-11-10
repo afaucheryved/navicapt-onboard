@@ -45,6 +45,9 @@ def set_alerte_dessalement(active: bool, alerte: AlerteSonore) -> None:
     """Active ou arrête le motif d'alerte."""
     alerte.set_active(active)
 
+def instructions_sonores() -> None:
+    """Prévoit le guidage sonore pour border la voile, à implémenter."""
+
 
 def update_alerte_sonore(maintenant_ms: int, alerte: AlerteSonore) -> None:
     """Fait avancer le motif sonore sans bloquer."""
