@@ -61,11 +61,29 @@ class SimulatedOutput:
         self.active = False
 
 
-class SimulatedWeather:
-    """Fournit des données explicitement simulées."""
+class InteractiveSensors(SimulatedSensors):
+    """Entrées du simulateur PC, transformées en vecteurs de capteurs."""
 
-    async def fetch(self, latitude: float, longitude: float, timeout_ms: int) -> dict:
-        """Renvoie une météo fictive sans accès réseau."""
-        await sleep_ms(1)
-        return {"source": "simulation", "temperature_c": 18.0,
-                "vent_ms": 4.0, "direction_vent_deg": 270.0}
+    def __init__(self, horloge=ticks_ms):
+        super().__init__(horloge)
+        self.cap = 0.0
+        self.bome = 0.0
+        self.gite = 0.0
+        self.button = False
+        self.failure = False
+
+    def refresh(self):
+        if self.failure:
+            raise OSError('Capteur débranché (simulation)')
+        self.inclinaison = self.gite
+
+    def read_bateau(self):
+        angle = math.radians(self.cap)
+        return (30 * math.cos(angle), 30 * math.sin(angle), 5.0)
+
+    def read_bome(self):
+        angle = math.radians(self.cap + self.bome)
+        return (30 * math.cos(angle), 30 * math.sin(angle), 5.0)
+
+    def read_button(self):
+        return self.button

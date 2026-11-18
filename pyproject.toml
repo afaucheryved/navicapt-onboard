@@ -5,3 +5,6 @@ description = "Prototype NaviCapt simulé ou embarqué sous MicroPython"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = []
+
+[project.optional-dependencies]
+viewer = ["pyserial>=3.5,<4"]

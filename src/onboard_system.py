@@ -15,7 +15,7 @@ class OnBoardSystem:
 
     def __init__(
         self, capteurs: object, sortie: object, meteo: object = None,
-        config: object = reglage, horloge: object = ticks_ms,
+        config: object = reglage, horloge: object = ticks_ms, logger: object = None,
     ) -> None:
         """Prépare les composants, les états et les références."""
         risque_dessalement(0, False, config.SEUIL_ACTIVATION, config.SEUIL_ARRET)
@@ -23,6 +23,8 @@ class OnBoardSystem:
             raise ValueError('Filtre ou période invalide')
         if config.CALIBRATION_ECHANTILLONS < 2 or config.ANTI_REBOND_MS < 0:
             raise ValueError('Calibration ou anti-rebond invalide')
+        self.logger = logger
+        self.appuis = 0
         self.capteurs = capteurs
         self.config = config
         self.horloge = horloge
@@ -94,6 +96,7 @@ class OnBoardSystem:
             if self._stable != self._brut:
                 self._stable = self._brut
                 if self._stable:
+                    self.appuis += 1
                     self.calibrate()
 
     def _calibration_step(self, cap_bateau: float, cap_bome: float) -> None:
@@ -140,6 +143,8 @@ class OnBoardSystem:
                     self._calibration_step(cap_bateau, cap_bome)
                 self.mesures = {'mesure_ms': debut, 'cap_deg': cap_bateau,
                                 'gite_deg': self.inclinaison_filtree,
+                                'acceleration_ms2': acceleration,
+                                'bome_brute_deg': get.get_bome_angle(cap_bateau, cap_bome, 0),
                                 'bome_deg': None if self.offset_bome is None else
                                 get.get_bome_angle(cap_bateau, cap_bome, self.offset_bome)}
                 if self.etat == 'fonctionnement':
@@ -176,6 +181,7 @@ class OnBoardSystem:
         """Expose l'état et la fraîcheur des mesures et de la météo."""
         maintenant = self.horloge()
         return {'etat': self.etat, 'erreur': self.erreur,
+                'bouton': self._stable, 'bouton_brut': self._brut, 'appuis': self.appuis,
                 'mesures': None if self.mesures is None else self.mesures.copy(),
                 'mesures_valides': self.etat == 'fonctionnement' and self.mesures is not None
                 and not mesure_perimee(self.mesures['mesure_ms'], maintenant,
@@ -184,7 +190,8 @@ class OnBoardSystem:
                 'meteo': None if self.cache_meteo is None else self.cache_meteo.copy(),
                 'meteo_perimee': self.meteo_ms is None or mesure_perimee(
                     self.meteo_ms, maintenant, self.config.METEO_AGE_MAX_MS),
-                'erreur_meteo': self.erreur_meteo}
+                'erreur_meteo': self.erreur_meteo,
+                'erreur_log': None if self.logger is None else self.logger.error}
 
     async def run(self, duree_ms: int = None, observer: object = None) -> None:
         """Lance le système et garantit l'arrêt des sorties à la sortie."""
@@ -192,12 +199,16 @@ class OnBoardSystem:
         debut = self.horloge()
         derniere_publication = None
         try:
+            if self.logger is not None:
+                self.logger.event('demarrage')
             self.initialize()
             if self.config.METEO_ACTIVE and self.meteo is not None:
                 tache_meteo = asyncio.create_task(self._weather_loop())
             while duree_ms is None or ticks_diff(self.horloge(), debut) < duree_ms:
                 cycle = self.horloge()
                 self.step(cycle)
+                if self.logger is not None:
+                    self.logger.observe(self.snapshot())
                 if observer is not None and (derniere_publication is None or
                         ticks_diff(cycle, derniere_publication) >= 250):
                     observer(self.snapshot())
@@ -211,3 +222,5 @@ class OnBoardSystem:
                 except asyncio.CancelledError:
                     pass
             arreter_sorties(self.alerte)
+            if self.logger is not None:
+                self.logger.event('arret', etat=self.etat, erreur=self.erreur)

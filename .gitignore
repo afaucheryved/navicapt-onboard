@@ -8,3 +8,11 @@ __pycache__/
 .env
 .env.*
 secrets.py
+
+# Paquet généré par tools/preparer_thonny.py
+thonny_pico/
+thonny_pico.zip
+
+# Journaux locaux / embarqués
+log.txt
+log.txt.1

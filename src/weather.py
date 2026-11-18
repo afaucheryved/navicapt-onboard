@@ -86,10 +86,13 @@ class OpenMeteo:
 
 
 async def connecter_wifi(timeout_ms: int) -> None:
-    """Connecte l'ESP32 avec les identifiants locaux si nécessaire."""
+    """Connecte le Pico W avec les identifiants locaux si nécessaire."""
     if sys.implementation.name != 'micropython':
         return
-    import network
+    try:
+        import network
+    except ImportError:
+        raise OSError('Météo embarquée : Pico W requis (Pico sans Wi-Fi non compatible)')
     wlan = network.WLAN(network.STA_IF)
     if wlan.isconnected():
         return
