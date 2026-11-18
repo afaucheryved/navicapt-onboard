@@ -11,7 +11,9 @@ secrets.py
 
 # Paquet généré par tools/preparer_thonny.py
 thonny_pico/
-thonny_pico.zip
+
+# Archives ZIP
+*.zip
 
 # Journaux locaux / embarqués
 log.txt
