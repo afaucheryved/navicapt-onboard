@@ -20,7 +20,7 @@ python3 tools/preparer_thonny.py
 python3 tools/installer_extension_thonny.py
 ```
 
-Téléverser le contenu de `thonny_pico/` à la racine du Pico, redémarrer Thonny après installation de l’extension, puis lancer `main.py` côté Pico. Poser la centrale à plat, aligner la bôme et appuyer sur **GP20** pour armer la surveillance.
+Téléverser le contenu de `src` et `main.py` à la racine du Pico, redémarrer Thonny après installation de l’extension, puis lancer `main.py` côté Pico. Poser la centrale à plat, aligner la bôme et appuyer sur **GP20** pour armer la surveillance.
 
 ## Se repérer
 
