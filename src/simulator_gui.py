@@ -136,7 +136,7 @@ class Simulator:
         self.status.config(text=text, bg='#ab3346' if state['risque'] or state['etat'] == 'defaut' else '#24556b')
         m = state['mesures'] or {}
         boom = m.get('bome_deg')
-        self.readings.config(text='Mesures : %s\nCap : %.1f°\nGîte filtrée : %.1f°\nBôme après zéro : %s' % (
+        self.readings.config(text='Mesures : %s\nCap : %.1f°\nGîte filtrée : %.1f°\nBôme / bateau : %s' % (
             'valides' if state['mesures_valides'] else 'non validées', m.get('cap_deg', 0),
             m.get('gite_deg', 0), '—' if boom is None else '%.1f°' % boom))
         weather = state['meteo']

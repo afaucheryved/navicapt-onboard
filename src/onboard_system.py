@@ -142,10 +142,13 @@ class OnBoardSystem:
                         raise ValueError('Zéro refusé : vérifier la gîte et les axes du capteur')
                     self._calibration_step(cap_bateau, cap_bome)
                 self.mesures = {'mesure_ms': debut, 'cap_deg': cap_bateau,
+                                'cap_bome_deg': cap_bome,
                                 'gite_deg': self.inclinaison_filtree,
                                 'acceleration_ms2': acceleration,
+                                # L'angle physique est la différence des deux caps, dès la première mesure.
                                 'bome_brute_deg': get.get_bome_angle(cap_bateau, cap_bome, 0),
-                                'bome_deg': None if self.offset_bome is None else
+                                'bome_deg': get.get_bome_angle(cap_bateau, cap_bome, 0),
+                                'bome_zero_deg': None if self.offset_bome is None else
                                 get.get_bome_angle(cap_bateau, cap_bome, self.offset_bome)}
                 if self.etat == 'fonctionnement':
                     self.risque = risque_dessalement(
@@ -200,7 +203,7 @@ class OnBoardSystem:
         derniere_publication = None
         try:
             if self.logger is not None:
-                self.logger.event('demarrage')
+                self.logger.event('demarrage', instantane=self.snapshot())
             self.initialize()
             if self.config.METEO_ACTIVE and self.meteo is not None:
                 tache_meteo = asyncio.create_task(self._weather_loop())
@@ -223,4 +226,4 @@ class OnBoardSystem:
                     pass
             arreter_sorties(self.alerte)
             if self.logger is not None:
-                self.logger.event('arret', etat=self.etat, erreur=self.erreur)
+                self.logger.event('arret', instantane=self.snapshot())

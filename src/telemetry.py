@@ -24,7 +24,7 @@ def decode(line):
             return None
         measures = state.get('mesures')
         if measures is not None:
-            for key in ('cap_deg', 'gite_deg', 'bome_deg', 'bome_brute_deg'):
+            for key in ('cap_deg', 'cap_bome_deg', 'gite_deg', 'bome_deg', 'bome_brute_deg', 'bome_zero_deg'):
                 value = measures.get(key)
                 if value is not None and (type(value) not in (int, float) or not math.isfinite(value)):
                     return None

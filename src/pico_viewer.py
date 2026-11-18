@@ -9,12 +9,14 @@ from .boat_view import dessiner_navire
 
 
 class PicoViewer:
-    def __init__(self, root, serial_factory=None, port_list=None):
+    def __init__(self, root, serial_factory=None, port_list=None, auto_connect=False, console=False):
         self.root = root
-        if serial_factory is None:
+        self.console = console
+        if serial_factory is None and not console:
             import serial
             from serial.tools.list_ports import comports
-            serial_factory, port_list = serial.Serial, comports
+            serial_factory = serial.Serial
+            port_list = port_list or comports
         self.serial_factory = serial_factory
         self.port_list = port_list or (lambda: [])
         self.serial = None
@@ -31,35 +33,42 @@ class PicoViewer:
         root.minsize(900, 800)
         root.configure(bg='#102534')
         style = ttk.Style(root)
-        style.theme_use('clam')
-        style.configure('TFrame', background='#102534')
-        style.configure('TLabel', background='#102534', foreground='#e9f3f8', font=('Sans', 11))
-        frame = ttk.Frame(root, padding=18)
+        if not console:
+            style.theme_use('clam')
+        style.configure('NaviCapt.TFrame', background='#102534')
+        style.configure('NaviCapt.TLabel', background='#102534', foreground='#e9f3f8', font=('Sans', 11))
+        from functools import partial
+        Label = partial(ttk.Label, style='NaviCapt.TLabel')
+        frame = ttk.Frame(root, padding=18, style='NaviCapt.TFrame')
         frame.pack(fill='both', expand=True)
-        ttk.Label(frame, text='NaviCapt / Mesures réelles', font=('Sans', 23, 'bold')).pack(anchor='w')
-        ttk.Label(frame, text='MPU6050 + deux QMC5883P • GP20 : calibration • RUN–GND : redémarrage').pack(anchor='w', pady=8)
-        connection = ttk.Frame(frame)
-        connection.pack(fill='x', pady=8)
+        Label(frame, text='NaviCapt / Mesures réelles', font=('Sans', 23, 'bold')).pack(anchor='w')
+        Label(frame, text='MPU6050 + deux QMC5883P • GP20 : calibration • RUN–GND : redémarrage').pack(anchor='w', pady=8)
+        connection = ttk.Frame(frame, style='NaviCapt.TFrame')
+        if not console:
+            connection.pack(fill='x', pady=8)
         self.port = tk.StringVar(value='/dev/ttyACM0' if os.name == 'posix' else '')
         self.port_box = ttk.Combobox(connection, textvariable=self.port, width=28)
         self.port_box.pack(side='left')
         ttk.Button(connection, text='Ports USB', command=self.refresh_ports).pack(side='left', padx=6)
         ttk.Button(connection, text='Connecter', command=self.connect).pack(side='left', padx=6)
         ttk.Button(connection, text='Déconnecter', command=self.disconnect).pack(side='left')
-        self.connection_text = ttk.Label(frame, text='Libérer le port dans Thonny, puis connecter et appuyer sur RUN.')
+        self.connection_text = Label(frame, text='Mesures reçues depuis la console Thonny.' if console else 'Libérer le port dans Thonny, puis connecter et appuyer sur RUN.')
         self.connection_text.pack(anchor='w', pady=5)
         self.banner = tk.Label(frame, text='AUCUNE MESURE', bg='#5c5662', fg='white',
                                font=('Sans', 13, 'bold'), pady=10, wraplength=970)
         self.banner.pack(fill='x', pady=8)
-        self.values = ttk.Label(frame, text='Cap : —    Gîte : —    Bôme : —', wraplength=970)
+        self.values = Label(frame, text='Cap : —    Gîte : —    Bôme : —', wraplength=970)
         self.values.pack(anchor='w', pady=6)
-        self.details = ttk.Label(frame, text='Les angles avant calibration sont non validés.', wraplength=970)
+        self.details = Label(frame, text='Les angles avant calibration sont non validés.', wraplength=970)
         self.details.pack(anchor='w', pady=6)
         self.canvas = tk.Canvas(frame, bg='#163747', highlightthickness=0, width=800, height=400)
         self.canvas.pack(fill='both', expand=True)
-        ttk.Label(frame, text='Les mesures et alertes sont calculées sur le Pico. '
+        Label(frame, text='Les mesures et alertes sont calculées sur le Pico. '
                   'Cette fenêtre ne commande ni les sorties ni la calibration.', wraplength=970).pack(anchor='w', pady=6)
-        self.refresh_ports()
+        if not console:
+            self.refresh_ports()
+        if auto_connect and not console:
+            self.auto_connect_pico()
         root.protocol('WM_DELETE_WINDOW', self.close)
         self.tick()
 
@@ -69,7 +78,21 @@ class PicoViewer:
         if ports and self.port.get() not in ports:
             self.port.set(ports[0])
 
+    def auto_connect_pico(self):
+        """Ouvre uniquement un Pico identifié, sans choisir un autre appareil série."""
+        candidates = [p for p in self.port_list() if getattr(p, 'vid', None) == 0x2E8A]
+        if len(candidates) == 1:
+            self.port.set(candidates[0].device)
+            self.connect()
+        elif len(candidates) > 1:
+            self.connection_text.config(text='Plusieurs Pico détectés : choisir le port puis cliquer Connecter.')
+        else:
+            self.connection_text.config(text='Brancher le Pico, choisir son port puis cliquer Connecter. '
+                                       'S’il est arrêté, appuyer sur RUN.')
+
     def connect(self):
+        if self.console:
+            return
         self.disconnect()
         self.wanted = True
         self._open()
@@ -143,21 +166,22 @@ class PicoViewer:
         def angle(key):
             value = m.get(key)
             return '—' if value is None else '%.1f°' % value
-        self.values.config(text='Cap : %s    Gîte : %s    Bôme après zéro : %s    Appuis GP20 : %s' % (
+        self.values.config(text='Cap : %s    Gîte : %s    Bôme / bateau : %s    Appuis GP20 : %s' % (
             angle('cap_deg'), angle('gite_deg'), angle('bome_deg'), state.get('appuis', 0)))
-        self.details.config(text='%s · bôme brute : %s · son : %s%s' % (
-            'Mesures validées' if valid else 'MESURES NON VALIDÉES', angle('bome_brute_deg'),
+        self.details.config(text='%s · cap bôme : %s · son : %s%s' % (
+            'Mesures validées' if valid else 'MESURES NON VALIDÉES', angle('cap_bome_deg'),
             'BIP' if state['son'] else 'silence',
             ' · journal : ' + state['erreur_log'] if state.get('erreur_log') else ''))
-        self.connection_text.config(text='USB connecté — dernière trame il y a %.1f s' % (time.monotonic()-self.received))
+        source = 'Console Thonny' if self.console else 'USB connecté'
+        self.connection_text.config(text='%s — dernière trame il y a %.1f s' % (source, time.monotonic()-self.received))
         cap, gite = m.get('cap_deg'), m.get('gite_deg')
-        boom = m.get('bome_deg') if valid else m.get('bome_brute_deg')
+        boom = m.get('bome_deg')
         if cap is None or gite is None or boom is None or state['etat'] == 'defaut':
             self.canvas.delete('all')
             self.canvas.create_text(30, 50, anchor='w', text='Dessin indisponible : mesures non exploitables.', fill='white')
         else:
             dessiner_navire(self.canvas, cap, gite, boom, state,
-                            'Bôme : angle calibré' if valid else 'Bôme brute — avant calibration')
+                            'Bôme : différence des deux caps')
 
     def tick(self):
         if self.closed:
@@ -189,10 +213,11 @@ class PicoViewer:
 def main():
     root = tk.Tk()
     try:
-        PicoViewer(root)
+        PicoViewer(root, auto_connect=True)
     except ImportError:
         from tkinter import messagebox
-        messagebox.showerror('pyserial requis', 'Installer pyserial dans Python PC : python3 -m pip install pyserial')
+        messagebox.showerror('pyserial requis', 'Dans Thonny, avec Python 3 sur le PC : '
+                             'Outils → Gérer les paquets → installer pyserial, puis relancer main.py.')
         root.destroy()
         return
     root.mainloop()

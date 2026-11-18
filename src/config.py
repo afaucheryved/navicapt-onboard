@@ -1,6 +1,6 @@
 """Réglages du prototype ; seuils de démonstration à valider sur le bateau."""
 
-SIMULATION = True  # Passer à False uniquement sur le Pico câblé.
+SIMULATION = True  # main.py détecte PC/Pico ; --simulation lance la démo PC.
 PERIODE_MS = 50
 ANTI_REBOND_MS = 50
 SEUIL_ACTIVATION = 40.0

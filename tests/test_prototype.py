@@ -127,7 +127,8 @@ class SystemTests(unittest.TestCase):
         self.assertEqual(self.sensors.reads, reads + 1)
         self.assertTrue(self.system.risque)
         self.assertTrue(self.output.active)
-        self.assertAlmostEqual(self.system.mesures['bome_deg'], 25)
+        self.assertAlmostEqual(self.system.mesures['bome_deg'], 55)
+        self.assertAlmostEqual(self.system.mesures['bome_zero_deg'], 25)
         self.sensors.roll = 35
         self.tick(750)
         self.assertTrue(self.system.risque)

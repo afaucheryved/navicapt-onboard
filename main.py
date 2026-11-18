@@ -1,4 +1,4 @@
-"""Prototype NaviCapt : simulation sur PC ou matériel Pico selon config.py."""
+"""NaviCapt : interface Tkinter sur PC, surveillance embarquée sur Pico."""
 
 import sys
 import asyncio
@@ -9,9 +9,10 @@ from src.onboard_system import OnBoardSystem
 def afficher(etat: dict) -> None:
     """Affiche les mesures et les alertes à cadence limitée."""
     mesures = etat['mesures'] or {}
-    print('état=%s gîte=%s° bôme=%s° risque=%s son=%s erreur=%s appuis=%s' % (
+    print('état=%s gîte=%s° bôme=%s° risque=%s son=%s erreur=%s appuis=%s cap_bateau=%s° cap_bôme=%s°' % (
         etat['etat'], mesures.get('gite_deg'), mesures.get('bome_deg'),
-        etat['risque'], etat['son'], etat['erreur'], etat.get('appuis', 0)))
+        etat['risque'], etat['son'], etat['erreur'], etat.get('appuis', 0),
+        mesures.get('cap_deg'), mesures.get('cap_bome_deg')))
     if config.TELEMETRIE_USB:
         from src.telemetry import encode
         print(encode(etat))
@@ -19,10 +20,22 @@ def afficher(etat: dict) -> None:
 
 def main() -> None:
     """Construit les pilotes et lance la boucle du prototype."""
-    if config.SIMULATION and '--console' not in sys.argv and len(sys.argv) == 1:
-        from src.simulator_gui import main as lancer_interface
-        lancer_interface()
-        return
+    sur_pico = sys.implementation.name == 'micropython'
+    args_pc = sys.argv[1:]
+    if not sur_pico:
+        # F5 dans Thonny avec Python 3 local : visualisation des vrais capteurs par USB.
+        if not args_pc:
+            from src.pico_viewer import main as lancer_interface
+            lancer_interface()
+            return
+        if args_pc == ['--simulation']:
+            from src.simulator_gui import main as lancer_simulation
+            lancer_simulation()
+            return
+        config.SIMULATION = True  # --console [durée] ou durée seule : scénario console.
+    else:
+        # Tkinter ne s'exécute pas sous MicroPython, même si les sources PC ont été copiées.
+        config.SIMULATION = False
     logger = None
     if config.SIMULATION:
         from src.drivers.simulation import SimulatedSensors, SimulatedOutput
@@ -35,8 +48,6 @@ def main() -> None:
             raise ValueError('La durée de simulation doit être positive')
         print('SIMULATION : appui automatique, zéro, gîte à 55° puis retour à plat.')
     else:
-        if sys.implementation.name != 'micropython':
-            raise RuntimeError('Le mode matériel nécessite MicroPython sur Pico')
         from src.drivers.hardware import HardwareSensors, HardwareOutput, valider_cablage
         valider_cablage(config)
         from src.weather import OpenMeteo
