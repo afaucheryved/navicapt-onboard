@@ -11,8 +11,8 @@ change = {n: ticks_ms() for n in pins}
 log = RunLogger()
 log.event('test_boutons_debut')
 print('TEST 30 s : appuyer sur GP20, puis GP21, puis GP22. 0 = appuyé ; 1 = relâché.')
-print('RUN-GND : reset matériel ; au relâchement, main.py repart (le test sera interrompu).')
-print('Le bouton externe doit être normalement ouvert ; aucune connexion à 3V3.')
+print('Bouton de calibration : GP20 vers GND, normalement ouvert ; aucune connexion à 3V3.')
+print('L’interrupteur des piles commande l’alimentation autonome, pas un GPIO.')
 print('État initial :', stable)
 debut = ticks_ms()
 try:

@@ -42,7 +42,7 @@ class PicoViewer:
         frame = ttk.Frame(root, padding=18, style='NaviCapt.TFrame')
         frame.pack(fill='both', expand=True)
         Label(frame, text='NaviCapt / Mesures réelles', font=('Sans', 23, 'bold')).pack(anchor='w')
-        Label(frame, text='MPU6050 + deux QMC5883P • GP20 : calibration • RUN–GND : redémarrage').pack(anchor='w', pady=8)
+        Label(frame, text='MPU6050 + deux QMC5883P • bouton GP20 : calibration • interrupteur : alimentation').pack(anchor='w', pady=8)
         connection = ttk.Frame(frame, style='NaviCapt.TFrame')
         if not console:
             connection.pack(fill='x', pady=8)
@@ -52,7 +52,7 @@ class PicoViewer:
         ttk.Button(connection, text='Ports USB', command=self.refresh_ports).pack(side='left', padx=6)
         ttk.Button(connection, text='Connecter', command=self.connect).pack(side='left', padx=6)
         ttk.Button(connection, text='Déconnecter', command=self.disconnect).pack(side='left')
-        self.connection_text = Label(frame, text='Mesures reçues depuis la console Thonny.' if console else 'Libérer le port dans Thonny, puis connecter et appuyer sur RUN.')
+        self.connection_text = Label(frame, text='Mesures reçues depuis la console Thonny.' if console else 'Libérer le port dans Thonny, puis connecter le Pico.')
         self.connection_text.pack(anchor='w', pady=5)
         self.banner = tk.Label(frame, text='AUCUNE MESURE', bg='#5c5662', fg='white',
                                font=('Sans', 13, 'bold'), pady=10, wraplength=970)
@@ -88,7 +88,7 @@ class PicoViewer:
             self.connection_text.config(text='Plusieurs Pico détectés : choisir le port puis cliquer Connecter.')
         else:
             self.connection_text.config(text='Brancher le Pico, choisir son port puis cliquer Connecter. '
-                                       'S’il est arrêté, appuyer sur RUN.')
+                                       'S’il est arrêté, relancer le programme sur le Pico.')
 
     def connect(self):
         if self.console:
@@ -105,7 +105,7 @@ class PicoViewer:
             self.serial = self.serial_factory(**options)
             self.buffer = b''
             self.discard_line = False
-            self.connection_text.config(text='Port ouvert — en attente des trames ; appuyer sur RUN si nécessaire.')
+            self.connection_text.config(text='Port ouvert — en attente des trames du Pico.')
         except OSError as error:
             self.serial = None
             self.connection_text.config(text='USB : %s. Libérer le port dans Thonny ou vérifier les permissions.' % error)
@@ -151,7 +151,7 @@ class PicoViewer:
         if not fresh or state is None:
             self.banner.config(text='AUCUNE MESURE RÉCENTE — liaison interrompue ou Pico en redémarrage', bg='#5c5662')
             self.values.config(text='Cap : —    Gîte : —    Bôme : —')
-            self.details.config(text='Les anciennes mesures sont masquées. Attendre le Pico, ou appuyer sur RUN.')
+            self.details.config(text='Les anciennes mesures sont masquées. Attendre les trames du Pico.')
             self.canvas.delete('all')
             return
         m = state.get('mesures') or {}

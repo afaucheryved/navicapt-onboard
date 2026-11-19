@@ -6,7 +6,8 @@ from .compat import ticks_ms, ticks_diff, sleep_ms
 from .functions import get_functions as get
 from .functions.determine_actions import risque_dessalement, mesure_perimee
 from .functions.do_actions import (
-    AlerteSonore, set_alerte_dessalement, update_alerte_sonore, arreter_sorties,
+    AlerteSonore, bips_demarrage, bip_calibration_reussie,
+    set_alerte_dessalement, update_alerte_sonore, arreter_sorties,
 )
 
 
@@ -204,11 +205,14 @@ class OnBoardSystem:
         try:
             if self.logger is not None:
                 self.logger.event('demarrage', instantane=self.snapshot())
+            if not self.config.SIMULATION:
+                await bips_demarrage(self.alerte.sortie, self.config.FREQUENCE_HZ)
             self.initialize()
             if self.config.METEO_ACTIVE and self.meteo is not None:
                 tache_meteo = asyncio.create_task(self._weather_loop())
             while duree_ms is None or ticks_diff(self.horloge(), debut) < duree_ms:
                 cycle = self.horloge()
+                etat_avant = self.etat
                 self.step(cycle)
                 if self.logger is not None:
                     self.logger.observe(self.snapshot())
@@ -216,6 +220,10 @@ class OnBoardSystem:
                         ticks_diff(cycle, derniere_publication) >= 250):
                     observer(self.snapshot())
                     derniere_publication = cycle
+                if (not self.config.SIMULATION and etat_avant == 'calibration'
+                        and self.etat == 'fonctionnement'):
+                    await bip_calibration_reussie(self.alerte.sortie,
+                                                  self.config.FREQUENCE_HZ)
                 await sleep_ms(max(1, self.config.PERIODE_MS - ticks_diff(self.horloge(), cycle)))
         finally:
             if tache_meteo is not None:

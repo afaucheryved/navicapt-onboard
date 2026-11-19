@@ -14,7 +14,7 @@ Ces consignes s’appliquent à l’ensemble de ce dépôt. Lire le [README](REA
 ## Contrats à préserver
 
 - `bome_deg` est la différence signée des caps bôme/bateau dans `[-180, 180[`, disponible dès la première acquisition ; `bome_zero_deg` est le zéro optionnel distinct.
-- GP20 arme/calibre ; RUN–GND redémarre matériellement le Pico. Ne pas traiter RUN comme un GPIO logiciel.
+- Le bouton entre GP20 et GND arme/calibre ; l’interrupteur des piles sur VSYS/GND commande l’alimentation autonome. Aucun bouton n’est branché à RUN.
 - Les angles affichés avant armement ne signifient pas que la surveillance est active ; respecter `mesures_valides`, les défauts et les dates de mesure.
 - Justifier les changements de seuils, d’hystérésis, de calibration ou de comportement d’alerte et vérifier les scénarios concernés.
 - L’extension Thonny écoute passivement la console, sans ouvrir un second port USB ni supprimer les sorties.

@@ -6,14 +6,16 @@ import struct
 import time
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from src import config
 from src.onboard_system import OnBoardSystem
 from src.drivers.simulation import SimulatedSensors, SimulatedOutput
 from src.drivers.hardware import SEN0694, MMC5603
 from src.functions.get_functions import get_bome_angle, get_bateau_cap, get_inclinaison
 from src.functions.determine_actions import risque_dessalement, mesure_perimee
-from src.functions.do_actions import AlerteSonore
+from src.functions.do_actions import (
+    AlerteSonore, bips_demarrage, bip_calibration_reussie,
+)
 from src.weather import OpenMeteo, normaliser_meteo
 
 
@@ -87,6 +89,39 @@ class Calculations(unittest.TestCase):
         self.assertTrue(output.active)
         alarm.set_active(False)
         self.assertFalse(output.active)
+
+
+class StartupAudioTests(unittest.IsolatedAsyncioTestCase):
+    async def test_three_bips_and_silence(self):
+        commands = []
+        waits = []
+
+        class Output:
+            def set_tone(self, active, frequence):
+                commands.append((active, frequence))
+
+        async def wait(duration):
+            waits.append(duration)
+
+        await bips_demarrage(Output(), 2000, wait)
+        self.assertEqual(commands, [(True, 2000), (False, 2000)] * 3)
+        self.assertFalse(commands[-1][0])
+        self.assertEqual(waits, [150] * 5)
+
+    async def test_long_bip_only_after_success(self):
+        commands = []
+        waits = []
+
+        class Output:
+            def set_tone(self, active, frequence):
+                commands.append((active, frequence))
+
+        async def wait(duration):
+            waits.append(duration)
+
+        await bip_calibration_reussie(Output(), 2000, wait)
+        self.assertEqual(commands, [(True, 2000), (False, 2000)])
+        self.assertEqual(waits, [600])
 
 
 class SystemTests(unittest.TestCase):
@@ -184,6 +219,34 @@ class SystemTests(unittest.TestCase):
 
 
 class AsyncTests(unittest.IsolatedAsyncioTestCase):
+    async def test_confirmation_only_on_calibration_success(self):
+        for result, expected in (('fonctionnement', 1), ('defaut', 0)):
+            clock = Clock()
+            system = OnBoardSystem(Sensors(clock), SimulatedOutput(),
+                                   config=settings(SIMULATION=False), horloge=clock)
+            def initialize():
+                system.etat = 'calibration'
+            def step(now):
+                system.etat = result
+                clock.now += 50
+            system.initialize = initialize
+            system.step = step
+            with patch('src.onboard_system.bips_demarrage', new_callable=AsyncMock), \
+                    patch('src.onboard_system.bip_calibration_reussie',
+                          new_callable=AsyncMock) as confirmation, \
+                    patch('src.onboard_system.sleep_ms', new_callable=AsyncMock):
+                await system.run(150)
+                self.assertEqual(confirmation.await_count, expected)
+
+    async def test_startup_bips_only_on_pico(self):
+        for simulation, expected in ((False, 1), (True, 0)):
+            clock = Clock()
+            system = OnBoardSystem(Sensors(clock), SimulatedOutput(),
+                                   config=settings(SIMULATION=simulation), horloge=clock)
+            with patch('src.onboard_system.bips_demarrage', new_callable=AsyncMock) as bips:
+                await system.run(0)
+                self.assertEqual(bips.await_count, expected)
+
     async def test_weather_failure_preserves_cache(self):
         class BrokenWeather:
             async def fetch(self, *args):

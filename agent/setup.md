@@ -24,8 +24,8 @@ Montage actuel : Pico W sur **Cytron Maker Pi Pico**, MPU6050 et deux modules GY
 - **Grove 2, boussole de bôme** : SDA → GP2 ; SCL → GP3 ; VCC → 3V3 ; GND → GND.
 - **Grove 3, boussole du bateau** : SDA → GP4 ; SCL → GP5 ; VCC → 3V3 ; GND → GND.
 - **Haut-parleur amplifié Keyes** : signal S → GP27 ; alimentation adaptée au module ; masse commune. GP27 fournit le signal PWM, pas l’alimentation du haut-parleur.
-- **GP20 intégré** : bouton d’armement et de calibration, actif bas. `BOUTON_PIN` permet de choisir GP21 ou GP22.
-- **Bouton externe normalement ouvert** : entre RUN et GND uniquement. Sur le connecteur 3V3/GND/RUN, laisser 3V3 libre. L’appui maintient le Pico en reset ; le relâchement relance `main.py` enregistré à sa racine.
+- **Bouton de calibration** : entre GP20 et GND, actif bas. `BOUTON_PIN=20` correspond à ce câblage.
+- **Alimentation externe** : piles reliées à VSYS et GND, avec un interrupteur en série sur un fil d’alimentation. Fermer l’interrupteur met le Pico sous tension et lance `main.py` ; l’ouvrir coupe l’alimentation autonome. Aucun bouton n’est branché à RUN.
 
 Les trois paires utilisent des bus `SoftI2C` distincts : les deux boussoles peuvent ainsi partager la même adresse. Les QMC5883P répondent à `0x2C` et leur identifiant au registre `0x00` doit être `0x80`. Le pilote prend aussi en charge QMC5883L (`0x0D`) et HMC5883L (`0x1E`). Le marquage GY-271 ne suffit pas à identifier la puce. Le pilote SEN0694 de l’ancien montage est conservé, mais n’est pas sélectionné.
 
@@ -46,7 +46,7 @@ Dans Thonny :
 3. Téléverser **le contenu**, directement à la racine du Pico : `main.py`, `src/` et les scripts `diagnostic_i2c.py`, `diagnostic_axes.py`, `diagnostic_boutons.py`. Le Pico doit contenir `/main.py` et `/src/`, pas `/thonny_pico/main.py`.
 4. Fermer les anciens onglets distants sans les réenregistrer avant de remplacer les fichiers ; les rouvrir ensuite depuis la partie « Raspberry Pi Pico ».
 5. Lancer `diagnostic_i2c.py` côté Pico pour vérifier les trois modules. Ce diagnostic n’active pas l’audio.
-6. Ouvrir `main.py` côté Pico et faire F5. La surveillance reste en `attente` jusqu’à l’appui GP20. Le Pico relance aussi ce fichier à son redémarrage.
+6. Ouvrir `main.py` côté Pico et faire F5. Le haut-parleur émet trois bips courts au lancement sur Pico, puis la surveillance reste en `attente` jusqu’à l’appui GP20. Le Pico relance aussi ce fichier à son redémarrage, notamment à la mise sous tension.
 
 Le paquet contient les modules PC pour permettre également son lancement local. Sur MicroPython, `main.py` choisit le programme embarqué sans importer Tkinter. Le booléen `SIMULATION` est adapté par le lanceur au mode d’exécution ; ce n’est pas le sélecteur à utiliser pour choisir l’interface dans Thonny.
 
@@ -84,7 +84,7 @@ Redémarrer Thonny après désinstallation. Les autres extensions et les logs re
 
 ## 5. Première calibration et sens des valeurs
 
-Poser la centrale à plat et placer la bôme dans l’axe du bateau, puis appuyer sur **GP20 pendant au moins 0,1 seconde**. Maintenir les capteurs immobiles : 10 mesures stables sont demandées. La séquence normale est `attente → calibration → fonctionnement`. Une gîte supérieure à 15° ou une variation de bôme supérieure à 3° pendant la calibration provoque un défaut ; corriger puis réappuyer.
+Poser la centrale à plat et placer la bôme dans l’axe du bateau, puis appuyer sur **GP20 pendant au moins 0,1 seconde**. Maintenir les capteurs immobiles : 10 mesures stables sont demandées. La séquence normale est `attente → calibration → fonctionnement` ; un bip long confirme la réussite. Une gîte supérieure à 15° ou une variation de bôme supérieure à 3° pendant la calibration provoque un défaut ; corriger puis réappuyer.
 
 L’angle principal est disponible dès la première acquisition réussie :
 
@@ -126,7 +126,7 @@ python main.py
 
 Sous Windows, activer `.venv\Scripts\Activate.ps1` dans PowerShell. Dans Thonny, on peut aussi sélectionner **Python 3 de l’ordinateur**, installer `pyserial` via **Outils → Gérer les paquets**, ouvrir le `main.py` local et faire F5.
 
-Cette fenêtre ouvre directement le port USB : elle ne doit pas être connectée en même temps que Thonny MicroPython. Un unique Pico identifié peut être connecté automatiquement ; sinon, choisir le port puis **Connecter**. Appuyer sur RUN si le programme embarqué a été arrêté. Si le port change après reset, le sélectionner à nouveau. `visualiseur_pico.py` reste un autre lanceur de ce mode.
+Cette fenêtre ouvre directement le port USB : elle ne doit pas être connectée en même temps que Thonny MicroPython. Un unique Pico identifié peut être connecté automatiquement ; sinon, choisir le port puis **Connecter**. Si le programme embarqué a été arrêté, le relancer sur le Pico. Si le port change après redémarrage, le sélectionner à nouveau. `visualiseur_pico.py` reste un autre lanceur de ce mode.
 
 ### Météo embarquée facultative
 
@@ -150,9 +150,9 @@ Rotation à 128 Kio : le fichier précédent devient `log.txt.1`, avec une seule
 Pour récupérer les journaux, arrêter le programme puis utiliser le panneau **Raspberry Pi Pico → Télécharger** sur `log.txt` et éventuellement `log.txt.1`. Un onglet ouvert ne suit pas automatiquement les écritures : le fermer **sans enregistrer** puis le rouvrir. Ne pas remplacer le journal récent par une ancienne copie de l’éditeur.
 
 - **Pas de fenêtre après F5** : vérifier l’extension dans le bon profil Thonny, redémarrer Thonny, vérifier `TELEMETRIE_USB=True` et la présence de lignes `NAVICAPT`. Un diagnostic qui ne produit pas ces trames n’ouvre pas la fenêtre.
-- **Port USB absent ou déconnecté** : RUN coupe temporairement la connexion. Relâcher le bouton, attendre puis sélectionner le port disponible. Vérifier aussi le câble et l’absence d’un autre lecteur série.
+- **Port USB absent ou déconnecté** : après un redémarrage ou une coupure d’alimentation, attendre puis sélectionner le port disponible. Vérifier aussi le câble et l’absence d’un autre lecteur série.
 - **Permission refusée sous Linux** : vérifier les groupes du compte et les droits du port avec `id` et `ls -l /dev/ttyACM*`. Si le port appartient à `dialout`, l’ajout au groupe par l’administrateur nécessite une nouvelle connexion de session pour être pris en compte.
-- **Bouton non détecté** : lancer `diagnostic_boutons.py` sur le Pico. Pendant 30 s, GP20/21/22 doivent chacun produire `APPUYÉ` et `RELÂCHÉ`. RUN interrompt ce test et relance `main.py` ; il ne s’agit pas d’un GPIO de calibration.
+- **Bouton non détecté** : lancer `diagnostic_boutons.py` sur le Pico. Le bouton câblé sur GP20 doit produire `APPUYÉ` et `RELÂCHÉ` pendant le test de 30 s. GP21/22 peuvent aussi être testés si leurs boutons sont utilisés.
 - **Gîte élevée à plat ou défaut de calibration** : lancer `diagnostic_axes.py`. Au repos, la norme de l’accélération doit être proche de 9,81 m/s². Vérifier le montage et les `AXES_ACCEL`/`SIGNES_ACCEL` ; ne pas soustraire arbitrairement un angle pour masquer le défaut.
 - **Capteur absent ou doute sur sa variante** : lancer `diagnostic_i2c.py`, comparer les adresses et identifiants avec le câblage ci-dessus.
 - **Ancien code après téléversement** : fermer les onglets distants avant de remplacer les fichiers et les rouvrir ; F5 exécute le contenu de l’éditeur.
