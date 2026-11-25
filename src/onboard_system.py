@@ -46,6 +46,9 @@ class OnBoardSystem:
         self._stable = False
         self._changement_ms = horloge()
         self._calibration = []
+        self._echec_ms = None
+        self.lectures_ratees = 0
+        self.derniere_erreur_lecture = None
 
     def _defaut(self, message: str) -> None:
         """Signale le défaut et exige un nouvel appui pour reprendre."""
@@ -54,6 +57,7 @@ class OnBoardSystem:
         self.offset_bome = None
         self.inclinaison_filtree = None
         self._calibration = []
+        self._echec_ms = None
         self.risque = False
         # Au prototype, même son pour risque et défaut ; la console les distingue.
         set_alerte_dessalement(True, self.alerte)
@@ -69,6 +73,7 @@ class OnBoardSystem:
             self.offset_bome = None
             self.mesures = None
             self.inclinaison_filtree = None
+            self._echec_ms = None
             self.risque = False
             set_alerte_dessalement(False, self.alerte)
         except (OSError, ValueError) as erreur:
@@ -120,15 +125,30 @@ class OnBoardSystem:
             self.update_button(get.get_bouton_data(self.capteurs), maintenant_ms)
             if self._pret:
                 debut = self.horloge()
-                self.capteurs.refresh()
+                try:
+                    self.capteurs.refresh()
+                    if mesure_perimee(debut, self.horloge(), self.config.AGE_MESURE_MAX_MS):
+                        raise OSError('Acquisition trop lente : mesures périmées')
+                except OSError as erreur:
+                    # Un raté I2C passager (ex. [Errno 110] ETIMEDOUT quand un câble
+                    # bouge) saute ce cycle en gardant les dernières mesures, dont la
+                    # date fait foi pour mesures_valides. Le défaut n'est déclaré que si
+                    # les échecs durent LECTURE_TOLERANCE_MS.
+                    if self._echec_ms is None:
+                        self._echec_ms = debut
+                    self.lectures_ratees += 1
+                    self.derniere_erreur_lecture = str(erreur)
+                    if ticks_diff(self.horloge(), self._echec_ms) >= self.config.LECTURE_TOLERANCE_MS:
+                        raise
+                    update_alerte_sonore(self.horloge(), self.alerte)
+                    return
+                self._echec_ms = None
                 bateau = get.get_boussole_bateau_data(self.capteurs)
                 bome = get.get_boussole_bome_data(self.capteurs)
                 acceleration = get.get_accelerometre_data(self.capteurs)
                 cap_bateau = get.get_bateau_cap(bateau)
                 cap_bome = get.get_bome_cap(bome)
                 inclinaison = get.get_inclinaison(acceleration)
-                if mesure_perimee(debut, self.horloge(), self.config.AGE_MESURE_MAX_MS):
-                    raise OSError('Acquisition trop lente : mesures périmées')
                 # Lisser le plus court écart évite une discontinuité à ±180°.
                 if self.inclinaison_filtree is None:
                     self.inclinaison_filtree = inclinaison
@@ -179,7 +199,9 @@ class OnBoardSystem:
         """Planifie les mises à jour météo à cadence lente."""
         while True:
             await self.update_weather()
-            await sleep_ms(self.config.METEO_PERIODE_MS)
+            # Après un échec (partage coupé, réseau introuvable…), réessayer vite.
+            await sleep_ms(self.config.METEO_PERIODE_MS if self.erreur_meteo is None
+                           else self.config.METEO_REESSAI_MS)
 
     def snapshot(self) -> dict:
         """Expose l'état et la fraîcheur des mesures et de la météo."""
@@ -191,10 +213,13 @@ class OnBoardSystem:
                 and not mesure_perimee(self.mesures['mesure_ms'], maintenant,
                                        self.config.AGE_MESURE_MAX_MS),
                 'risque': self.risque, 'son': self.alerte.son,
+                'lectures_ratees': self.lectures_ratees,
+                'derniere_erreur_lecture': self.derniere_erreur_lecture,
                 'meteo': None if self.cache_meteo is None else self.cache_meteo.copy(),
                 'meteo_perimee': self.meteo_ms is None or mesure_perimee(
                     self.meteo_ms, maintenant, self.config.METEO_AGE_MAX_MS),
                 'erreur_meteo': self.erreur_meteo,
+                'meteo_age_ms': None if self.meteo_ms is None else ticks_diff(maintenant, self.meteo_ms),
                 'erreur_log': None if self.logger is None else self.logger.error}
 
     async def run(self, duree_ms: int = None, observer: object = None) -> None:

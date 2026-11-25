@@ -13,8 +13,8 @@ class GuiTests(unittest.TestCase):
         class Weather:
             async def fetch(self, *args):
                 await asyncio.sleep(.01)
-                return dict(source='Open-Meteo', temperature_c=15, vent_ms=3.26,
-                            direction_vent_deg=162, date_source='2026-11-16T16:30')
+                return dict(source='Open-Meteo (Météo-France)', vent_kn=6.3, rafales_kn=11.2,
+                            beaufort=2, direction_vent_deg=162, date_source='2026-11-16T16:30')
         root = tk.Tk()
         gui = Simulator(root, Weather())
         errors = []

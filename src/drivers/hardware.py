@@ -249,18 +249,33 @@ class HardwareSensors:
 class HardwareOutput:
     """Produit une tonalité PWM vers l'étage d'amplification du haut-parleur."""
 
-    def __init__(self, pin: int) -> None:
-        """Prépare la sortie audio silencieuse."""
+    def __init__(self, pin: int, volume: int = 32768) -> None:
+        """Prépare la sortie audio silencieuse (même séquence que test_haut_parleur.py)."""
         from machine import PWM, Pin
-        self.pwm = PWM(Pin(pin), freq=2000, duty_u16=0)
+        # Pas d'arguments freq/duty_u16 au constructeur : non pris en charge par
+        # tous les firmwares MicroPython.
+        self.pwm = PWM(Pin(pin))
+        self.pwm.duty_u16(0)
+        self.volume = volume
+        self.frequence = None
         self.active = False
         self.closed = False
 
     def set_tone(self, active: bool, frequence: int) -> None:
-        """Commande une onde carrée, pas une sinusoïde."""
+        """Commande une onde carrée, pas une sinusoïde.
+
+        Même séquence que test_haut_parleur.py : fréquence réglée seulement à
+        l'allumage (et si elle change), extinction par duty_u16(0) seul. Régler
+        la fréquence juste avant l'extinction laissait un son continu sur Pico.
+        """
         if not self.closed:
-            self.pwm.freq(frequence)
-            self.pwm.duty_u16(16384 if active else 0)
+            if active:
+                if frequence != self.frequence:
+                    self.pwm.freq(frequence)
+                    self.frequence = frequence
+                self.pwm.duty_u16(self.volume)
+            else:
+                self.pwm.duty_u16(0)
         self.active = active and not self.closed
 
     def close(self) -> None:

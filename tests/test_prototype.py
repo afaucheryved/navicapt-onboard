@@ -16,7 +16,7 @@ from src.functions.determine_actions import risque_dessalement, mesure_perimee
 from src.functions.do_actions import (
     AlerteSonore, bips_demarrage, bip_calibration_reussie,
 )
-from src.weather import OpenMeteo, normaliser_meteo
+from src.weather import OpenMeteo, normaliser_meteo, chemin_meteo, angle_relatif
 
 
 class Clock:
@@ -130,7 +130,8 @@ class SystemTests(unittest.TestCase):
         self.sensors = Sensors(self.clock)
         self.output = SimulatedOutput()
         self.system = OnBoardSystem(self.sensors, self.output,
-                                    config=settings(ALPHA=1), horloge=self.clock)
+                                    config=settings(ALPHA=1, LECTURE_TOLERANCE_MS=250),
+                                    horloge=self.clock)
         self.system.initialize()
     def tick(self, now):
         self.clock.now = now
@@ -175,6 +176,8 @@ class SystemTests(unittest.TestCase):
         self.calibrate()
         self.sensors.failure = True
         self.tick(700)
+        self.assertEqual(self.system.etat, 'fonctionnement')  # raté encore toléré
+        self.tick(950)
         self.assertEqual(self.system.etat, 'defaut')
         self.assertTrue(self.output.active)
         self.assertFalse(self.system.snapshot()['mesures_valides'])
@@ -183,6 +186,28 @@ class SystemTests(unittest.TestCase):
         self.assertEqual(self.system.etat, 'defaut')
         self.calibrate()
         self.assertFalse(self.output.active)
+    def test_transient_i2c_error_tolerated(self):
+        self.calibrate()
+        mesures = dict(self.system.mesures)
+        self.sensors.failure = True
+        self.tick(700)
+        self.tick(750)
+        self.assertEqual(self.system.etat, 'fonctionnement')
+        self.assertEqual(self.system.mesures, mesures)  # dernières mesures conservées
+        self.assertFalse(self.output.active)
+        self.assertEqual(self.system.snapshot()['lectures_ratees'], 2)
+        self.sensors.failure = False
+        self.tick(800)
+        self.assertEqual(self.system.etat, 'fonctionnement')
+        self.assertTrue(self.system.snapshot()['mesures_valides'])
+        # Nouvelle série d'échecs : la tolérance repart de zéro.
+        self.sensors.failure = True
+        self.tick(1000)
+        self.assertEqual(self.system.etat, 'fonctionnement')
+        self.tick(1200)
+        self.assertEqual(self.system.etat, 'fonctionnement')
+        self.tick(1250)
+        self.assertEqual(self.system.etat, 'defaut')
     def test_stale_and_slow(self):
         self.calibrate()
         self.clock.now = 2000
@@ -247,6 +272,28 @@ class AsyncTests(unittest.IsolatedAsyncioTestCase):
                 await system.run(0)
                 self.assertEqual(bips.await_count, expected)
 
+    async def test_weather_retries_quickly_after_failure(self):
+        class FlakyWeather:
+            calls = 0
+            async def fetch(self, *args):
+                FlakyWeather.calls += 1
+                if FlakyWeather.calls == 1:
+                    raise OSError('Wi-Fi : réseau introuvable')
+                return {'source': 'test'}
+        clock = Clock()
+        system = OnBoardSystem(Sensors(clock), SimulatedOutput(), FlakyWeather(),
+                               config=settings(METEO_PERIODE_MS=900000, METEO_REESSAI_MS=30000),
+                               horloge=clock)
+        waits = []
+        async def fake_sleep(ms):
+            waits.append(ms)
+            if len(waits) == 2:
+                raise asyncio.CancelledError
+        with patch('src.onboard_system.sleep_ms', fake_sleep):
+            with self.assertRaises(asyncio.CancelledError):
+                await system._weather_loop()
+        self.assertEqual(waits, [30000, 900000])
+        self.assertEqual(system.cache_meteo, {'source': 'test'})
     async def test_weather_failure_preserves_cache(self):
         class BrokenWeather:
             async def fetch(self, *args):
@@ -343,31 +390,82 @@ class HardwareTests(unittest.TestCase):
                 with self.assertRaises(OSError):
                     driver.read_sample()
     def test_weather_units(self):
-        payload = {'current': {'time': '2026-11-10T12:00', 'temperature_2m': 18,
-                               'wind_speed_10m': 3, 'wind_direction_10m': 270},
-                   'current_units': {'temperature_2m': '°C', 'wind_speed_10m': 'm/s',
-                                     'wind_direction_10m': '°'}}
-        self.assertEqual(normaliser_meteo(payload)['vent_ms'], 3)
+        payload = {'current': {'time': '2026-11-10T12:00', 'wind_speed_10m': 3,
+                               'wind_direction_10m': 270, 'wind_gusts_10m': 7.5},
+                   'current_units': {'wind_speed_10m': 'kn', 'wind_direction_10m': '°',
+                                     'wind_gusts_10m': 'kn'}}
+        meteo = normaliser_meteo(payload)
+        self.assertEqual((meteo['vent_kn'], meteo['rafales_kn'], meteo['beaufort']), (3, 7.5, 1))
+        payload['current']['wind_gusts_10m'] = None
+        self.assertIsNone(normaliser_meteo(payload)['rafales_kn'])
         payload['current_units']['wind_speed_10m'] = 'km/h'
         with self.assertRaises(ValueError):
             normaliser_meteo(payload)
 
+    def test_weather_path_and_relative_angle(self):
+        chemin = chemin_meteo(44.84, -0.565)
+        self.assertTrue(chemin.startswith('/v1/meteofrance?latitude=44.84&longitude=-0.565'))
+        self.assertIn('wind_speed_unit=kn', chemin)
+        self.assertIn('wind_gusts_10m', chemin)
+        self.assertEqual(angle_relatif(90, 0), 90)
+        self.assertEqual(angle_relatif(10, 350), 20)
+        self.assertEqual(angle_relatif(300, 0), -60)
+
 
 class WeatherHTTPTests(unittest.TestCase):
     def test_http_response_is_closed_and_normalised(self):
-        payload = {'current': {'time': '2026-11-10T12:00', 'temperature_2m': 18,
-                               'wind_speed_10m': 3, 'wind_direction_10m': 270},
-                   'current_units': {'temperature_2m': '°C', 'wind_speed_10m': 'm/s',
-                                     'wind_direction_10m': '°'}}
+        payload = {'current': {'time': '2026-11-10T12:00', 'wind_speed_10m': 3,
+                               'wind_direction_10m': 270, 'wind_gusts_10m': 7.5},
+                   'current_units': {'wind_speed_10m': 'kn', 'wind_direction_10m': '°',
+                                     'wind_gusts_10m': 'kn'}}
         from unittest.mock import MagicMock
         response = MagicMock()
         response.__enter__.return_value = response
         response.read.return_value = json.dumps(payload).encode()
         with patch('urllib.request.urlopen', return_value=response) as request:
-            data = OpenMeteo()._request('https://api.open-meteo.com/fixture', 5000)
-        self.assertEqual(data['vent_ms'], 3)
+            data = OpenMeteo()._request('/fixture', 5000)
+        self.assertEqual(data['vent_kn'], 3)
+        self.assertEqual(request.call_args.args[0], 'https://api.open-meteo.com/fixture')
         self.assertEqual(request.call_args.kwargs['timeout'], 5)
         response.__exit__.assert_called_once()
+
+    def test_pico_socket_request(self):
+        import io
+        from unittest.mock import MagicMock
+        from src.weather import http_get_json
+        corps = b'{"current": {}}'
+        class Flux(io.BytesIO):
+            def __init__(self, data):
+                super().__init__(data)
+                self.envoye = b''
+            def write(self, data):
+                self.envoye += data
+        flux = Flux(b'HTTP/1.0 200 OK\r\nContent-Length: %d\r\n\r\n' % len(corps) + corps)
+        brut = MagicMock()
+        ctx = MagicMock()
+        ctx.wrap_socket.return_value = flux
+        flux.close = MagicMock()
+        with patch('socket.getaddrinfo', return_value=[(0, 0, 0, '', ('1.2.3.4', 443))]), \
+                patch('socket.socket', return_value=brut), \
+                patch('ssl.SSLContext', return_value=ctx):
+            self.assertEqual(http_get_json('api.open-meteo.com', '/v1/x', 20000), {'current': {}})
+        brut.settimeout.assert_called_once_with(20)
+        brut.connect.assert_called_once_with(('1.2.3.4', 443))
+        self.assertTrue(flux.envoye.startswith(b'GET /v1/x HTTP/1.0\r\nHost: api.open-meteo.com'))
+        flux.close.assert_called_once()
+
+    def test_pico_socket_http_error(self):
+        import io
+        from unittest.mock import MagicMock
+        from src.weather import http_get_json
+        flux = io.BytesIO(b'HTTP/1.0 400 Bad Request\r\n\r\n{"reason": "x"}')
+        ctx = MagicMock()
+        ctx.wrap_socket.return_value = flux
+        with patch('socket.getaddrinfo', return_value=[(0, 0, 0, '', ('1.2.3.4', 443))]), \
+                patch('socket.socket', return_value=MagicMock()), \
+                patch('ssl.SSLContext', return_value=ctx):
+            with self.assertRaises(OSError):
+                http_get_json('api.open-meteo.com', '/v1/x', 20000)
 
     def test_oversized_http_response_rejected(self):
         from unittest.mock import MagicMock
@@ -376,5 +474,5 @@ class WeatherHTTPTests(unittest.TestCase):
         response.read.return_value = b'x' * 16385
         with patch('urllib.request.urlopen', return_value=response):
             with self.assertRaises(ValueError):
-                OpenMeteo()._request('https://api.open-meteo.com/fixture', 5000)
+                OpenMeteo()._request('/fixture', 5000)
         response.__exit__.assert_called_once()

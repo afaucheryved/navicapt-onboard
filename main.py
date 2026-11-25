@@ -51,7 +51,7 @@ def main() -> None:
         from src.drivers.hardware import HardwareSensors, HardwareOutput, valider_cablage
         valider_cablage(config)
         from src.weather import OpenMeteo
-        capteurs, sortie, meteo = HardwareSensors(config), HardwareOutput(config.AUDIO_PIN), OpenMeteo()
+        capteurs, sortie, meteo = HardwareSensors(config), HardwareOutput(config.AUDIO_PIN, config.VOLUME_DUTY), OpenMeteo()
         duree_ms = None
         if config.LOG_ACTIF:
             from src.run_log import RunLogger

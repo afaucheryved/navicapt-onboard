@@ -5,9 +5,36 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 from src import config
-from src.drivers.hardware import GY271, MPU6050, HardwareSensors, valider_cablage
+from src.drivers.hardware import GY271, MPU6050, HardwareSensors, HardwareOutput, valider_cablage
 from src.drivers.simulation import InteractiveSensors
 from src.functions.get_functions import get_bateau_cap, get_bome_angle
+
+
+class SpeakerTests(unittest.TestCase):
+    def test_tone_sequence_matches_working_speaker_test(self):
+        """Extinction par duty_u16(0) seul, sans régler la fréquence juste avant."""
+        appels = []
+        class FakePWM:
+            def __init__(self, pin):
+                appels.append(('init', pin))
+            def freq(self, f):
+                appels.append(('freq', f))
+            def duty_u16(self, d):
+                appels.append(('duty', d))
+            def deinit(self):
+                appels.append(('deinit',))
+        machine = SimpleNamespace(PWM=FakePWM, Pin=lambda n: n)
+        with patch.dict('sys.modules', {'machine': machine}):
+            sortie = HardwareOutput(18, 32768)
+            for _ in range(2):
+                sortie.set_tone(True, 2000)
+                sortie.set_tone(False, 2000)
+            sortie.close()
+        self.assertEqual(appels, [('init', 18), ('duty', 0),
+                                  ('freq', 2000), ('duty', 32768), ('duty', 0),
+                                  ('duty', 32768), ('duty', 0),
+                                  ('duty', 0), ('deinit',)])
+        self.assertFalse(sortie.active)
 
 
 def settings(**changes):
@@ -64,7 +91,7 @@ class NewWiringTests(unittest.TestCase):
         self.assertEqual((config.SDA_BATEAU, config.SCL_BATEAU), (4, 5))
         valider_cablage(config)
         for changes in ({'CABLAGE_CONFIRME': False}, {'AUDIO_PIN': 3},
-                        {'SDA_IMU': None}, {'SDA_BOME': 4}, {'BOUTON_PIN': 27}):
+                        {'SDA_IMU': None}, {'SDA_BOME': 4}, {'BOUTON_PIN': 18}):
             with self.assertRaises(ValueError):
                 valider_cablage(settings(**changes))
     @patch('src.drivers.hardware.pause_ms')

@@ -14,14 +14,14 @@ p.write_text(p.read_text().replace('SIMULATION = True', 'SIMULATION = False'))
 (cible / 'LIRE_AVANT_TRANSFERT.txt').write_text(
     'Dans Thonny : choisir MicroPython (Raspberry Pi Pico).\n'
     'Transférer le CONTENU de thonny_pico à la racine du Pico : main.py, diagnostic_i2c.py et src/.\n'
-    'src/config.py configuré : MPU Grove1, bôme Grove2, bateau Grove3, audio GP27, bouton GP20.\n'
+    'src/config.py configuré : MPU Grove1, bôme Grove2, bateau Grove3, audio GP18 (Grove 4), bouton GP20.\n'
     'Prochain essai : diagnostic_boutons.py (GP20/21/22), puis main.py à plat + GP20.\n'
     'Bouton de calibration : GP20 vers GND ; interrupteur des piles sur l’alimentation VSYS/GND.\n'
     'log.txt est créé sur le Pico automatiquement ; ne pas remplacer les logs existants.\n'
     'Interface via console : installer l’extension avec tools/installer_extension_thonny.py depuis la racine du dépôt,\n'
     'redémarrer Thonny, garder MicroPython et faire F5 sur main.py du Pico.\n'
     'Alternative USB directe : ce main.py local avec Python 3, pyserial requis.\n'
-    'Météo embarquée désactivée par défaut.\n'
+    'Météo embarquée active : partage de connexion du téléphone (WIFI_SSID dans src/config.py, ou secrets.py).\n'
     'Les modules Tkinter sont inclus pour le PC ; ils ne sont pas chargés sur le Pico. Voir README.\n')
 shutil.make_archive(str(racine / 'thonny_pico'), 'zip', cible)
 print('Dossier :', cible)

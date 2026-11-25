@@ -7,6 +7,9 @@ SEUIL_ACTIVATION = 40.0
 SEUIL_ARRET = 30.0
 ALPHA = 0.25
 AGE_MESURE_MAX_MS = 500
+# Ratés de lecture I2C tolérés (câble qui bouge, [Errno 110]) avant défaut : 1 s.
+# Au-delà de AGE_MESURE_MAX_MS, mesures_valides passe à False pendant la coupure.
+LECTURE_TOLERANCE_MS = 1000
 CALIBRATION_ECHANTILLONS = 10
 CALIBRATION_ECART_MAX_DEG = 3.0
 CALIBRATION_GITE_MAX_DEG = 15.0
@@ -24,7 +27,8 @@ SCL_BOME = 3
 SDA_IMU = 0  # Grove 1, MPU6050.
 SCL_IMU = 1
 BOUTON_PIN = 20  # Bouton de calibration câblé entre GP20 et GND.
-AUDIO_PIN = 27  # Fil S du haut-parleur Keyes, confirmé.
+AUDIO_PIN = 18  # Haut-parleur sur Grove 4 (signal GP18), validé par test_haut_parleur.py.
+VOLUME_DUTY = 32768  # Rapport cyclique PWM : 50 % = son le plus fort (max 65535).
 IMU_MODELE = 'MPU6050'  # 'SEN0694' ou 'MPU6050'
 ADRESSE_IMU = 0x68  # MPU6050 : 0x68 ou 0x69 ; SEN0694 : 0x4A.
 ADRESSE_BOME = None  # Auto : QMC5883P 0x2C (montage réel), QMC5883L 0x0D, HMC5883L 0x1E.
@@ -41,13 +45,18 @@ SIGNES_MAG_BOME = (1, 1, 1)
 OFFSET_MAG_BATEAU = (0.0, 0.0, 0.0)
 OFFSET_MAG_BOME = (0.0, 0.0, 0.0)
 
-METEO_ACTIVE = False
-LATITUDE = 44.84  # Position fixe d'exemple, à remplacer par celle du bateau.
-LONGITUDE = -0.58
-METEO_PERIODE_MS = 300000
-METEO_AGE_MAX_MS = 900000
-METEO_TIMEOUT_MS = 5000
-# Identifiants facultatifs dans secrets.py, ignoré par Git : WIFI_SSID, WIFI_PASSWORD.
+# Météo : Open-Meteo, modèle Météo-France AROME (pas de 15 min), vent en nœuds.
+# Le Pico W passe par le partage de connexion du téléphone (2,4 GHz).
+METEO_ACTIVE = True
+LATITUDE = 44.84  # Garonne à Bordeaux (pont de pierre), à remplacer par le plan d'eau.
+LONGITUDE = -0.565
+METEO_PERIODE_MS = 900000  # Le modèle AROME est au pas de 15 min.
+METEO_REESSAI_MS = 3000  # Tant que le Wi-Fi/la requête échoue : nouvel essai toutes les 3 s.
+METEO_AGE_MAX_MS = 1800000  # Périmée après deux rafraîchissements manqués.
+METEO_TIMEOUT_MS = 20000  # Wi-Fi puis DNS + TLS sur partage mobile : 20 s comme test_api.py.
+# Partage de connexion du téléphone ; secrets.py (ignoré par Git) prime s'il existe.
+WIFI_SSID = 'Xiaomi 13T'
+WIFI_PASSWORD = ''
 
 # Sur Pico : journal persistant, rotation log.txt -> log.txt.1 (128 Kio chacun).
 LOG_ACTIF = True

@@ -5,7 +5,7 @@ import time
 import tkinter as tk
 from tkinter import ttk
 from .telemetry import decode
-from .boat_view import dessiner_navire
+from .boat_view import dessiner_navire, textes_vent
 
 
 class PicoViewer:
@@ -29,8 +29,8 @@ class PicoViewer:
         self.closed = False
         self.after_id = None
         root.title('NaviCapt — mesures réelles du Pico')
-        root.geometry('1050x820')
-        root.minsize(900, 800)
+        root.geometry('1050x900')
+        root.minsize(900, 860)
         root.configure(bg='#102534')
         style = ttk.Style(root)
         if not console:
@@ -61,7 +61,16 @@ class PicoViewer:
         self.values.pack(anchor='w', pady=6)
         self.details = Label(frame, text='Les angles avant calibration sont non validés.', wraplength=970)
         self.details.pack(anchor='w', pady=6)
-        self.canvas = tk.Canvas(frame, bg='#163747', highlightthickness=0, width=800, height=400)
+        # Bandeau vent : grande ligne lisible + ligne de contexte (allure, fraîcheur).
+        vent = tk.Frame(frame, bg='#0b1c27', padx=14, pady=8)
+        vent.pack(fill='x', pady=(2, 8))
+        self.wind_title = tk.Label(vent, text='VENT — en attente', bg='#0b1c27', fg='#b9d5df',
+                                   font=('Sans', 17, 'bold'), anchor='w', justify='left')
+        self.wind_title.pack(fill='x')
+        self.wind_detail = tk.Label(vent, text='', bg='#0b1c27', fg='#e9f3f8',
+                                    font=('Sans', 11), anchor='w', justify='left', wraplength=960)
+        self.wind_detail.pack(fill='x')
+        self.canvas = tk.Canvas(frame, bg='#163747', highlightthickness=0, width=800, height=380)
         self.canvas.pack(fill='both', expand=True)
         Label(frame, text='Les mesures et alertes sont calculées sur le Pico. '
                   'Cette fenêtre ne commande ni les sorties ni la calibration.', wraplength=970).pack(anchor='w', pady=6)
@@ -152,6 +161,8 @@ class PicoViewer:
             self.banner.config(text='AUCUNE MESURE RÉCENTE — liaison interrompue ou Pico en redémarrage', bg='#5c5662')
             self.values.config(text='Cap : —    Gîte : —    Bôme : —')
             self.details.config(text='Les anciennes mesures sont masquées. Attendre les trames du Pico.')
+            self.wind_title.config(text='VENT — aucune donnée récente', fg='#b9d5df')
+            self.wind_detail.config(text='')
             self.canvas.delete('all')
             return
         m = state.get('mesures') or {}
@@ -176,6 +187,9 @@ class PicoViewer:
         self.connection_text.config(text='%s — dernière trame il y a %.1f s' % (source, time.monotonic()-self.received))
         cap, gite = m.get('cap_deg'), m.get('gite_deg')
         boom = m.get('bome_deg')
+        titre, detail, couleur = textes_vent(state, cap)
+        self.wind_title.config(text=titre, fg=couleur)
+        self.wind_detail.config(text=detail)
         if cap is None or gite is None or boom is None or state['etat'] == 'defaut':
             self.canvas.delete('all')
             self.canvas.create_text(30, 50, anchor='w', text='Dessin indisponible : mesures non exploitables.', fill='white')

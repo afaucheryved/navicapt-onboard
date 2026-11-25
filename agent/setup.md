@@ -23,7 +23,7 @@ Montage actuel : Pico W sur **Cytron Maker Pi Pico**, MPU6050 et deux modules GY
 - **Grove 1, MPU6050** : SDA → GP0 ; SCL → GP1 ; VCC → 3V3 ; GND → GND. Adresse attendue `0x68` (`0x69` si AD0 impose cette adresse).
 - **Grove 2, boussole de bôme** : SDA → GP2 ; SCL → GP3 ; VCC → 3V3 ; GND → GND.
 - **Grove 3, boussole du bateau** : SDA → GP4 ; SCL → GP5 ; VCC → 3V3 ; GND → GND.
-- **Haut-parleur amplifié Keyes** : signal S → GP27 ; alimentation adaptée au module ; masse commune. GP27 fournit le signal PWM, pas l’alimentation du haut-parleur.
+- **Haut-parleur Grove** : signal → GP18 (connecteur Grove du GP18 sur le Maker Pi Pico) ; masse commune. GP18 fournit le signal PWM (rapport cyclique 50 %, `VOLUME_DUTY`), pas l’alimentation du haut-parleur. `test_haut_parleur.py` permet de le vérifier seul.
 - **Bouton de calibration** : entre GP20 et GND, actif bas. `BOUTON_PIN=20` correspond à ce câblage.
 - **Alimentation externe** : piles reliées à VSYS et GND, avec un interrupteur en série sur un fil d’alimentation. Fermer l’interrupteur met le Pico sous tension et lance `main.py` ; l’ouvrir coupe l’alimentation autonome. Aucun bouton n’est branché à RUN.
 
@@ -110,7 +110,7 @@ python3 main.py --console 9
 
 La fenêtre propose des curseurs de cap, bôme et gîte, une calibration simulée, une panne de capteur, un scénario automatique et un bip PC optionnel. La sonnerie dépend des réglages audio de l’ordinateur.
 
-La simulation interroge **réellement Open-Meteo en HTTPS** aux coordonnées `LATITUDE`/`LONGITUDE` de la configuration (Bordeaux par défaut). Mise à jour toutes les 5 minutes, bouton d’actualisation et cache déclaré périmé après 15 minutes. Une panne conserve la dernière réponse avec son erreur ; aucune météo fictive ne la remplace. Ce sont des données de modèle, pas un capteur de vent embarqué.
+La simulation interroge **réellement Open-Meteo en HTTPS** (modèle Météo-France AROME : vent moyen, rafales en nœuds, direction) aux coordonnées `LATITUDE`/`LONGITUDE` de la configuration (Garonne à Bordeaux par défaut). Mise à jour toutes les 15 minutes (pas du modèle), bouton d’actualisation et cache déclaré périmé après 30 minutes. Une panne conserve la dernière réponse avec son erreur ; aucune météo fictive ne la remplace. Ce sont des données de modèle, pas un capteur de vent embarqué.
 
 ### Affichage USB indépendant
 
@@ -128,16 +128,11 @@ Sous Windows, activer `.venv\Scripts\Activate.ps1` dans PowerShell. Dans Thonny,
 
 Cette fenêtre ouvre directement le port USB : elle ne doit pas être connectée en même temps que Thonny MicroPython. Un unique Pico identifié peut être connecté automatiquement ; sinon, choisir le port puis **Connecter**. Si le programme embarqué a été arrêté, le relancer sur le Pico. Si le port change après redémarrage, le sélectionner à nouveau. `visualiseur_pico.py` reste un autre lanceur de ce mode.
 
-### Météo embarquée facultative
+### Météo embarquée
 
-Désactivée par défaut. Sur Pico W, installer `requests` via le shell MicroPython :
+Active par défaut (`METEO_ACTIVE`). Le Pico W se connecte au **partage de connexion du téléphone** (`WIFI_SSID`/`WIFI_PASSWORD` dans `src/config.py`, réseau 2,4 GHz), puis interroge Open-Meteo en HTTPS par sockets : aucun paquet `requests` n’est nécessaire. Le certificat n’est pas vérifié côté Pico (prototype). Un `secrets.py` à la racine du Pico avec `WIFI_SSID` et `WIFI_PASSWORD` remplace les valeurs de la configuration ; il reste hors du dépôt.
 
-```python
-import mip
-mip.install('requests')
-```
-
-Créer `secrets.py` à la racine du Pico avec `WIFI_SSID` et `WIFI_PASSWORD`, puis activer `METEO_ACTIVE` dans la configuration embarquée. Le Pico doit disposer d’une connexion Wi-Fi utilisable. Garder les identifiants hors du dépôt. La météo ne pilote pas l’alarme.
+La console affiche la connexion Wi-Fi et, en cas d’échec, la cause (réseau introuvable, mot de passe incorrect) ou l’étape réseau en défaut (DNS, TCP, TLS, réponse). `test_api.py` permet de tester la chaîne seule. La météo ne pilote pas l’alarme et une panne réseau n’interrompt pas la surveillance.
 
 ## 7. Journal et dépannage
 

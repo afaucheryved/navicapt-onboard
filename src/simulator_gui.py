@@ -143,9 +143,11 @@ class Simulator:
         message = 'En attente de la réponse Open-Meteo…'
         if weather:
             age = ticks_diff(ticks_ms(), self.system.meteo_ms) // 1000
-            message = ('Open-Meteo · %.1f °C · vent %.1f m/s · venant de %.0f° · '
-                       'source %s UTC · reçu il y a %ss%s') % (
-                weather['temperature_c'], weather['vent_ms'], weather['direction_vent_deg'],
+            rafales = weather.get('rafales_kn')
+            message = ('Open-Meteo (Météo-France) · vent %.1f kn (F%d) · venant de %.0f° · '
+                       'rafales %s · source %s UTC · reçu il y a %ss%s') % (
+                weather['vent_kn'], weather['beaufort'], weather['direction_vent_deg'],
+                '—' if rafales is None else '%.1f kn' % rafales,
                 weather['date_source'], age, ' · PÉRIMÉ' if state['meteo_perimee'] else '')
         if state['erreur_meteo']:
             message += '\nÉchec météo : ' + state['erreur_meteo']
